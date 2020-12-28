@@ -15,6 +15,11 @@
 package kafka
 
 import (
+	"fmt"
+	"github.com/fullstorydev/grpcurl"
+	"github.com/golang/protobuf/proto"
+	"github.com/jhump/protoreflect/desc"
+	"github.com/jhump/protoreflect/dynamic"
 	"regexp"
 	"strings"
 	"time"
@@ -57,6 +62,25 @@ func GetMessages(flags MSGFlags, topics ...string) []*kafkactl.Message {
 
 func getMSGs(flags MSGFlags, topics ...string) []*kafkactl.Message {
 	var messages []*kafkactl.Message
+	var md *desc.MessageDescriptor
+	var msgFac *dynamic.MessageFactory
+	var formatter = grpcurl.NewJSONFormatter(false, nil)
+	if len(flags.ProtoFile) != 0 && len(flags.ProtoMsg) != 0 {
+		fd, err := grpcurl.DescriptorSourceFromProtoFiles(flags.ProtoImport, flags.ProtoFile...)
+		if err != nil {
+			closeFatal("Failed to read proto source, err: %v", err)
+		}
+		s, err := fd.FindSymbol(flags.ProtoMsg)
+		if err != nil {
+			closeFatal("No symbol %s,", flags.ProtoMsg)
+		}
+		var ok bool
+		md, ok = s.(*desc.MessageDescriptor)
+		if !ok {
+			closeFatal("%s is not a msg", flags.ProtoMsg)
+		}
+		msgFac = dynamic.NewMessageFactoryWithDefaults()
+	}
 	for _, topic := range topics {
 		var parts []int32
 		topicSummary := kafkactl.GetTopicSummaries(SearchTopicMeta(topic))
@@ -90,6 +114,18 @@ func getMSGs(flags MSGFlags, topics ...string) []*kafkactl.Message {
 			if err != nil {
 				out.Warnf("WARN %v [%v] %v: %v", topic, part, off, err)
 			} else {
+				if len(flags.ProtoFile) != 0 && len(flags.ProtoMsg) != 0 {
+					m := msgFac.NewMessage(md)
+					err := proto.Unmarshal(msg.Value, m)
+					if err != nil {
+						msg.Value = []byte(fmt.Sprintf("Unmarshal fail, err: %v, value: %s", err, string(msg.Value)))
+					}
+					buf, err := formatter(m)
+					if err != nil {
+						msg.Value = []byte(fmt.Sprintf("Umarshal fail, err: %v", err))
+					}
+					msg.Value = []byte(buf)
+				}
 				messages = append(messages, msg)
 			}
 		}
@@ -102,6 +138,25 @@ func getMSGs(flags MSGFlags, topics ...string) []*kafkactl.Message {
 
 func tailMSGs(flags MSGFlags, topics ...string) []*kafkactl.Message {
 	var messages []*kafkactl.Message
+	var md *desc.MessageDescriptor
+	var msgFac *dynamic.MessageFactory
+	var formatter = grpcurl.NewJSONFormatter(false, nil)
+	if len(flags.ProtoFile) != 0 && len(flags.ProtoMsg) != 0 {
+		fd, err := grpcurl.DescriptorSourceFromProtoFiles(flags.ProtoImport, flags.ProtoFile...)
+		if err != nil {
+			closeFatal("Failed to read proto source, err: %v", err)
+		}
+		s, err := fd.FindSymbol(flags.ProtoMsg)
+		if err != nil {
+			closeFatal("No symbol %s,", flags.ProtoMsg)
+		}
+		var ok bool
+		md, ok = s.(*desc.MessageDescriptor)
+		if !ok {
+			closeFatal("%s is not a msg", flags.ProtoMsg)
+		}
+		msgFac = dynamic.NewMessageFactoryWithDefaults()
+	}
 	for _, topic := range topics {
 		var parts []int32
 		topicSummary := kafkactl.GetTopicSummaries(SearchTopicMeta(topic))
@@ -146,6 +201,18 @@ func tailMSGs(flags MSGFlags, topics ...string) []*kafkactl.Message {
 		for i := 0; i < len(parts); {
 			select {
 			case msg := <-msgChan:
+				if len(flags.ProtoFile) != 0 && len(flags.ProtoMsg) != 0 {
+					m := msgFac.NewMessage(md)
+					err := proto.Unmarshal(msg.Value, m)
+					if err != nil {
+						msg.Value = []byte(fmt.Sprintf("Unmarshal fail, err: %v, value: %s", err, string(msg.Value)))
+					}
+					buf, err := formatter(m)
+					if err != nil {
+						msg.Value = []byte(fmt.Sprintf("Umarshal fail, err: %v", err))
+					}
+					msg.Value = []byte(buf)
+				}
 				messages = append(messages, msg)
 			case <-doneChan:
 				i++
