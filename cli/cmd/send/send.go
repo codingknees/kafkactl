@@ -43,4 +43,7 @@ func init() {
 	CmdSend.Flags().StringSliceVar(&sendFlags.Partitions, "partitions", []string{}, "Target Specific Partitions, otherwise dictated by partitioning scheme (comma separated list).")
 	CmdSend.Flags().BoolVar(&sendFlags.NoSplit, "no-split", false, "Disable Line Splits.")
 	CmdSend.Flags().StringVar(&sendFlags.LineSplit, "split", "\n", "Line Split Delimiter.")
+	CmdSend.Flags().StringVarP(&sendFlags.ProtoImport, "proto-import", "I", "", "Proto Import Path")
+	CmdSend.Flags().StringVarP(&sendFlags.ProtoFile, "proto-file", "f", "", "Proto File")
+	CmdSend.Flags().StringVarP(&sendFlags.ProtoMsg, "proto-msg", "m", "", "Proto Message, used to unmarshal")
 }

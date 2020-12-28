@@ -18,6 +18,9 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/golang/protobuf/proto"
+	"github.com/jhump/protoreflect/desc"
+	"github.com/jhump/protoreflect/dynamic"
 	"io"
 	"io/ioutil"
 	"os"
@@ -29,6 +32,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	kafkactl "github.com/jbvmio/kafka"
+	"github.com/fullstorydev/grpcurl"
 )
 
 const delim string = "!7dd###755^^^557D$!"
@@ -44,11 +48,58 @@ type SendFlags struct {
 	FromStdin     bool
 	NoSplit       bool
 	LineSplit     string
+	ProtoImport   string
+	ProtoFile     string
+	ProtoMsg      string
 }
 
 type sendData struct {
 	key   string
 	value string
+}
+
+func pbMarshal(importPaths []string, protoFiles []string, msgName string, msgStr string) string {
+	out.PrintStrings("import:")
+	out.PrintStrings(importPaths...)
+	out.PrintStrings("files:")
+	out.PrintStrings(protoFiles...)
+	fd, err := grpcurl.DescriptorSourceFromProtoFiles(importPaths, protoFiles...)
+	if err != nil {
+		closeFatal("Failed to read proto source, err: %v", err)
+	}
+	s, err := fd.FindSymbol(msgName)
+	if err != nil {
+		closeFatal("No symbol %s,", msgName)
+	}
+	md, ok := s.(*desc.MessageDescriptor)
+	if !ok {
+		closeFatal("%s is not a msg", msgName)
+	}
+	msgFac := dynamic.NewMessageFactoryWithDefaults()
+	msg := msgFac.NewMessage(md)
+	parser := grpcurl.NewJSONRequestParser(strings.NewReader(msgStr), nil)
+	if err := parser.Next(msg); err != nil {
+		closeFatal("Unmarshal pb fail, err: %v", err)
+	}
+	buf, err := proto.Marshal(msg)
+	if err != nil {
+		closeFatal("Marshal pb fail, err: %v", err)
+	}
+	return string(buf)
+}
+
+func newSendData(flags SendFlags, key string, value string) sendData {
+	data := sendData{
+		key:   key,
+		value: value,
+	}
+	if len(flags.ProtoMsg) == 0 || len(flags.ProtoFile) == 0 {
+		return data
+	}
+	importPaths := strings.Split(flags.ProtoImport, ",")
+	protoFiles := strings.Split(flags.ProtoFile, ",")
+	data.value = pbMarshal(importPaths, protoFiles, flags.ProtoMsg, value)
+	return data
 }
 
 func ProduceFromFile(flags SendFlags, data io.Reader, topics ...string) {
@@ -71,28 +122,19 @@ func ProduceFromFile(flags SendFlags, data io.Reader, topics ...string) {
 		switch subMatch {
 		case flags.Value != "":
 			for _, line := range stringLines {
-				sd := sendData{
-					key:   line,
-					value: flags.Value,
-				}
+				sd := newSendData(flags, line, flags.Value)
 				allData = append(allData, sd)
 			}
 		case flags.Key != "":
 			for _, line := range stringLines {
-				sd := sendData{
-					key:   flags.Key,
-					value: line,
-				}
+				sd := newSendData(flags, flags.Key, line)
 				allData = append(allData, sd)
 			}
 		case flags.Delimiter != "":
 			for _, line := range stringLines {
 				keyVal := strings.Split(line, flags.Delimiter)
 				if len(keyVal) == 2 {
-					sd := sendData{
-						key:   keyVal[0],
-						value: keyVal[1],
-					}
+					sd := newSendData(flags, keyVal[0], keyVal[1])
 					allData = append(allData, sd)
 				} else {
 					out.Warnf("[WARN] Unable to parse data:\n%v\n", line)
@@ -100,19 +142,14 @@ func ProduceFromFile(flags SendFlags, data io.Reader, topics ...string) {
 			}
 		default:
 			for _, line := range stringLines {
-				sd := sendData{
-					value: line,
-				}
+				sd := newSendData(flags, "", line)
 				allData = append(allData, sd)
 			}
 		}
 	default:
 		keyVal := strings.Split(string(b), delim)
 		if len(keyVal) == 2 {
-			sd := sendData{
-				key:   keyVal[0],
-				value: keyVal[1],
-			}
+			sd := newSendData(flags, keyVal[0], keyVal[1])
 			allData = append(allData, sd)
 		} else {
 			out.Warnf("[WARN] Unable to parse data:\n%v\n", keyVal)
