@@ -48,6 +48,9 @@ func init() {
 	CmdLogs.Flags().Int32VarP(&logsFlags.Partition, "partition", "p", -1, "Target a Specific Partition, otherwise all.")
 	CmdLogs.Flags().StringSliceVar(&logsFlags.Partitions, "partitions", []string{}, "Target Specific Partitions, otherwise all (comma separated list).")
 	CmdLogs.Flags().StringSliceVar(&logsFlags.JSONFilters, "json-filter", []string{}, "Filter Message Stream by JSON Filter, used with --follow.")
+	CmdLogs.Flags().StringSliceVarP(&logsFlags.ProtoImport, "proto-import", "I", []string{}, "Proto Import Path")
+	CmdLogs.Flags().StringSliceVarP(&logsFlags.ProtoFile, "proto-file", "f", []string{}, "Proto File")
+	CmdLogs.Flags().StringVarP(&logsFlags.ProtoMsg, "proto-msg", "m", "", "Proto Message, used to unmarshal")
 	CmdLogs.PersistentFlags().StringVarP(&outFlags.Format, "out", "o", "", "Change Output Format - yaml|json.")
 	CmdLogs.AddCommand(CmdQuery)
 }

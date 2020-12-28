@@ -36,6 +36,9 @@ type MSGFlags struct {
 	ToTime       string
 	LastDuration string
 	JSONFilters  []string
+	ProtoImport  []string
+	ProtoFile    []string
+	ProtoMsg     string
 }
 
 // OffsetRangeMap contains Topics and a Range of Offsets specified from a beginning and end.

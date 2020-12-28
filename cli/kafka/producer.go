@@ -48,8 +48,8 @@ type SendFlags struct {
 	FromStdin     bool
 	NoSplit       bool
 	LineSplit     string
-	ProtoImport   string
-	ProtoFile     string
+	ProtoImport   []string
+	ProtoFile     []string
 	ProtoMsg      string
 }
 
@@ -59,10 +59,6 @@ type sendData struct {
 }
 
 func pbMarshal(importPaths []string, protoFiles []string, msgName string, msgStr string) string {
-	out.PrintStrings("import:")
-	out.PrintStrings(importPaths...)
-	out.PrintStrings("files:")
-	out.PrintStrings(protoFiles...)
 	fd, err := grpcurl.DescriptorSourceFromProtoFiles(importPaths, protoFiles...)
 	if err != nil {
 		closeFatal("Failed to read proto source, err: %v", err)
@@ -96,9 +92,7 @@ func newSendData(flags SendFlags, key string, value string) sendData {
 	if len(flags.ProtoMsg) == 0 || len(flags.ProtoFile) == 0 {
 		return data
 	}
-	importPaths := strings.Split(flags.ProtoImport, ",")
-	protoFiles := strings.Split(flags.ProtoFile, ",")
-	data.value = pbMarshal(importPaths, protoFiles, flags.ProtoMsg, value)
+	data.value = pbMarshal(flags.ProtoImport, flags.ProtoFile, flags.ProtoMsg, value)
 	return data
 }
 
